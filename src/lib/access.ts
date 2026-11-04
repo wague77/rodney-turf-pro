@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { query } from "./db";
 
 export type AccessSession = { codeId?: string; admin?: boolean };
@@ -12,13 +12,22 @@ export function safeEqual(a: string, b: string) {
   return timingSafeEqual(x, y);
 }
 
+function secret() {
+  const s = process.env["SESSION_SECRET"];
+  if (!s) throw new Error("SESSION_SECRET manquant");
+  return s;
+}
+
+const sign = (payload: string) => createHmac("sha256", secret()).update(payload).digest("base64url");
+
 export async function getAccessSession(): Promise<AccessSession> {
   const cookieStore = await cookies();
   const val = cookieStore.get(COOKIE_NAME)?.value;
   if (!val) return {};
   try {
-    const data = JSON.parse(Buffer.from(val, "base64").toString("utf-8"));
-    return data;
+    const [payload, sig] = val.split(".");
+    if (!payload || !sig || !safeEqual(sig, sign(payload))) return {};
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf-8"));
   } catch {
     return {};
   }
@@ -26,7 +35,8 @@ export async function getAccessSession(): Promise<AccessSession> {
 
 export async function setAccessSession(session: AccessSession) {
   const cookieStore = await cookies();
-  const val = Buffer.from(JSON.stringify(session)).toString("base64");
+  const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
+  const val = `${payload}.${sign(payload)}`;
   cookieStore.set(COOKIE_NAME, val, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
