@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/access";
+import { query } from "@/lib/db";
 
 const genCode = () => {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -11,9 +12,8 @@ const genCode = () => {
 
 export async function GET() {
   try {
-    const db = await requireAdmin();
-    const { data, error } = await db.from("access_codes").select("*").order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
+    await requireAdmin();
+    const data = await query("SELECT * FROM access_codes ORDER BY created_at DESC");
     return NextResponse.json(data);
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Accès refusé" }, { status: 403 });
@@ -27,18 +27,16 @@ const createSchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    const db = await requireAdmin();
+    await requireAdmin();
     const body = await req.json();
     const { label, days } = createSchema.parse(body);
 
     const expires_at = days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null;
-    const { data: row, error } = await db
-      .from("access_codes")
-      .insert({ code: genCode(), label: label || null, expires_at })
-      .select()
-      .single();
+    const [row] = await query(
+      "INSERT INTO access_codes (code, label, expires_at) VALUES ($1, $2, $3) RETURNING *",
+      [genCode(), label || null, expires_at],
+    );
 
-    if (error) throw new Error(error.message);
     return NextResponse.json(row);
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Erreur de création" }, { status: 400 });
@@ -52,12 +50,11 @@ const toggleSchema = z.object({
 
 export async function PATCH(req: Request) {
   try {
-    const db = await requireAdmin();
+    await requireAdmin();
     const body = await req.json();
     const { id, active } = toggleSchema.parse(body);
 
-    const { error } = await db.from("access_codes").update({ active }).eq("id", id);
-    if (error) throw new Error(error.message);
+    await query("UPDATE access_codes SET active = $1 WHERE id = $2", [active, id]);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Erreur de mise à jour" }, { status: 400 });
@@ -70,12 +67,11 @@ const deleteSchema = z.object({
 
 export async function DELETE(req: Request) {
   try {
-    const db = await requireAdmin();
+    await requireAdmin();
     const body = await req.json();
     const { id } = deleteSchema.parse(body);
 
-    const { error } = await db.from("access_codes").delete().eq("id", id);
-    if (error) throw new Error(error.message);
+    await query("DELETE FROM access_codes WHERE id = $1", [id]);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Erreur de suppression" }, { status: 400 });
