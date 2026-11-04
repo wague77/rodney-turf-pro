@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { supabaseAdmin } from "@/lib/supabase";
+import { query } from "@/lib/db";
 import { setAccessSession } from "@/lib/access";
 
 const redeemSchema = z.object({
@@ -13,20 +13,13 @@ export async function POST(req: Request) {
     const { code: rawCode } = redeemSchema.parse(body);
     const code = rawCode.toUpperCase();
 
-    const { data: row } = await supabaseAdmin
-      .from("access_codes")
-      .select("*")
-      .eq("code", code)
-      .maybeSingle();
+    const [row] = await query("SELECT * FROM access_codes WHERE code = $1", [code]);
 
     if (!row || !row.active || (row.expires_at && new Date(row.expires_at) <= new Date())) {
       return NextResponse.json({ ok: false }, { status: 400 });
     }
 
-    await supabaseAdmin
-      .from("access_codes")
-      .update({ uses: row.uses + 1, last_used_at: new Date().toISOString() })
-      .eq("id", row.id);
+    await query("UPDATE access_codes SET uses = uses + 1, last_used_at = now() WHERE id = $1", [row.id]);
 
     await setAccessSession({ codeId: row.id, admin: false });
     return NextResponse.json({ ok: true });

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { supabaseAdmin } from "./supabase";
+import { query } from "./db";
 
 export type AccessSession = { codeId?: string; admin?: boolean };
 
@@ -46,11 +46,10 @@ export async function hasValidAccess(): Promise<{ ok: boolean; admin: boolean }>
   if (s.admin) return { ok: true, admin: true };
   if (!s.codeId) return { ok: false, admin: false };
   try {
-    const { data } = await supabaseAdmin
-      .from("access_codes")
-      .select("active, expires_at")
-      .eq("id", s.codeId)
-      .maybeSingle();
+    const [data] = await query<{ active: boolean; expires_at: string | null }>(
+      "SELECT active, expires_at FROM access_codes WHERE id = $1",
+      [s.codeId],
+    );
     const ok = !!data && data.active && (!data.expires_at || new Date(data.expires_at) > new Date());
     if (!ok) await clearAccessSession();
     return { ok, admin: false };
@@ -67,5 +66,4 @@ export async function requireAccess() {
 export async function requireAdmin() {
   const s = await getAccessSession();
   if (!s.admin) throw new Error("Admin requis");
-  return supabaseAdmin;
 }
