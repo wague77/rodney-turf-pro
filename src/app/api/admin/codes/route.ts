@@ -16,6 +16,7 @@ export async function GET() {
     const data = await query("SELECT * FROM access_codes ORDER BY created_at DESC");
     return NextResponse.json(data);
   } catch (e: any) {
+    console.error("[admin/codes]", e);
     return NextResponse.json({ error: e?.message || "Accès refusé" }, { status: 403 });
   }
 }
@@ -39,6 +40,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(row);
   } catch (e: any) {
+    console.error("[admin/codes]", e);
     return NextResponse.json({ error: e?.message || "Erreur de création" }, { status: 400 });
   }
 }
@@ -57,6 +59,7 @@ export async function PATCH(req: Request) {
     await query("UPDATE access_codes SET active = $1 WHERE id = $2", [active, id]);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
+    console.error("[admin/codes]", e);
     return NextResponse.json({ error: e?.message || "Erreur de mise à jour" }, { status: 400 });
   }
 }
@@ -74,6 +77,7 @@ export async function DELETE(req: Request) {
     await query("DELETE FROM access_codes WHERE id = $1", [id]);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
+    console.error("[admin/codes]", e);
     return NextResponse.json({ error: e?.message || "Erreur de suppression" }, { status: 400 });
   }
 }
