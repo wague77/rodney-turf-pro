@@ -105,6 +105,8 @@ function Panel() {
         setLast(row.code);
         setLabel("");
         refresh();
+      } else {
+        alert(row.error || "Erreur de création");
       }
     } catch (err) {
       console.error(err);
